@@ -1,0 +1,4 @@
+pytz
+pymongo
+selenium
+webdriver-manager
