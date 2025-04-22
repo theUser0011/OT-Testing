@@ -14,8 +14,6 @@ M_TOKEN = os.getenv("M_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
 # Fetch stock symbols
 stock_codes = nse.get_stock_codes()
-stock_codes = stock_codes[:10]
-
 client = MongoClient(MONGO_URL)
 
 stock_symbols = [symbol for symbol in stock_codes if symbol != "SYMBOL"]
@@ -23,7 +21,7 @@ stock_symbols = [symbol for symbol in stock_codes if symbol != "SYMBOL"]
 # Retry settings
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # seconds
-MAX_WORKERS = 5  # adjust based on system/network limits
+MAX_WORKERS = 15  # adjust based on system/network limits
 
 # Get current time in IST
 ist = pytz.timezone('Asia/Kolkata')
@@ -206,7 +204,7 @@ def main():
         if all_stock_data:
             with open(file_name, "w", encoding='utf-8') as f:
                 json.dump(all_stock_data, f, indent=2)
-            print("✅ All stock data saved to", file_name)
+            print(f"✅ All stock data{len(all_stock_data)} saved to", file_name)
         
         # Save to MongoDB
         
@@ -216,18 +214,35 @@ def main():
         m = mega.login(keys[0], keys[1])
 
         try:
-            fd_name = m.create_folder("OT_DATA")
-            f_handle = fd_name['OT_data']
+            # Attempt to create the folder
+            try:
+                fd_name = m.create_folder("OT_DATA")
+                f_handle = fd_name['OT_data']
+            except Exception as e:
+                print(f"❌ Failed to create folder: {e}")
+                raise  # Reraise the exception to stop further processing
 
-            uploading_file = m.upload(file_name, f_handle)
-            link = m.get_upload_link(uploading_file)
-            if link:
-                
-                save_link_to_mongodb(link,file_name)
+            # Attempt to upload the file
+            try:
+                uploading_file = m.upload(file_name, f_handle)
+                link = m.get_upload_link(uploading_file)
+            except Exception as e:
+                print(f"❌ Failed to upload file: {e}")
+                raise  # Reraise the exception to stop further processing
+
+            # Attempt to save the link to MongoDB
+            try:
+                if link:
+                    save_link_to_mongodb(link, file_name)
+            except Exception as e:
+                print(f"❌ Failed to save link to MongoDB: {e}")
+                raise  # Reraise the exception to stop further processing
 
         except Exception as e:
-            print("Error failed to upload:", e)
+            print(f"⚠️ Error occurred during upload process: {e}")
+            # Optionally, you could save the data to MongoDB here as a fallback
             save_to_mongodb(all_stock_data)
+
 
 if __name__ == "__main__":
     main()
