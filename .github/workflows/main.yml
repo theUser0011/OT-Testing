@@ -6,7 +6,7 @@ on:
       - main  # Trigger on push to the main branch (you can change this if needed)
   # workflow_dispatch:  # Allows manual triggering
   schedule:
-    - cron: '50 3 * * *'  # This will run the workflow at 3:50 AM UTC, which is 9:20 AM IST
+    - cron: '30 10 * * *'  # This will run the workflow at 10:30 AM UTC, which is 4:00 PM IST
 
 jobs:
   run-python-script:
