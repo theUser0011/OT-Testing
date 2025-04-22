@@ -1,120 +1,63 @@
-import time
-import os
-import traceback
-import csv
 import json
+import time
+from nseconnect import Nse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-import pytz
-
+import pytz, os
 from pymongo import MongoClient
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.support.ui import Select
-from webdriver_manager.chrome import ChromeDriverManager
+from mega import Mega
 
+# Initialize NSE instance
+nse = Nse()
 
-mongo_url = os.getenv("MONGO_URL")
+M_TOKEN = os.getenv("M_TOKEN")
+MONGO_URL = os.getenv("MONGO_URL")
+# Fetch stock symbols
+stock_codes = nse.get_stock_codes()
+client = MongoClient(MONGO_URL)
 
+stock_symbols = [symbol for symbol in stock_codes if symbol != "SYMBOL"]
 
-# Set download folder
-down_folder = 'downloads'
-download_dir = os.path.abspath(down_folder)
-os.makedirs(download_dir, exist_ok=True)
+# Retry settings
+MAX_RETRIES = 3
+RETRY_DELAY = 5  # seconds
+MAX_WORKERS = 15  # adjust based on system/network limits
 
+# Get current time in IST
+ist = pytz.timezone('Asia/Kolkata')
+current_time_ist = datetime.now(ist)
 
-# Path to ChromeDriver
-chromedriver_path = r"chromedriver"
+# Format date as day-month-year : hour:minute (e.g., 21-04-2025 : 23:35)
+formatted_date = current_time_ist.strftime("%d-%m-%Y : %H:%M")
+file_name = f"{formatted_date.strip()}.json"
 
-def mround(value, round_to):
-    return round_to * round(value / round_to)
+def save_link_to_mongodb(link,file_name):
+    try:
+        db = client["OT_TRADING"]
+        collection = db["file_links"]
+        
+        # Check if document with the same date already exists
+        existing_document = collection.find_one({"date": formatted_date})
+        
+        if existing_document:
+            print("❌ Data already exists for today's date. Skipping insert.")
+            return None
+        else:
+            # If no document with today's date exists, insert new data
+            document = {
+                "date": formatted_date,
+                "file_name":file_name,
+                "link": link
+            }
+            collection.insert_one(document)
+            print("✅ link Data saved to MongoDB successfully.")
+            return None
+    except Exception as e:
+        print("❌ Failed to save data to MongoDB:", e)
 
-def calculate_and_save(open_price, yesterday_high, yesterday_low):
-    open_price = float(open_price)
-    yesterday_high = float(yesterday_high)
-    yesterday_low = float(yesterday_low)
-
-    capital = 100000  # D5
-    risk_per_trade = capital * 0.01  # 1% of capital
-
-    range_value = yesterday_high - yesterday_low
-    buy_entry = mround((open_price + (range_value * 0.55)), 0.05)
-    sell_entry = mround((open_price - (range_value * 0.55)), 0.05)
-
-    buy_stoploss = mround(buy_entry - (buy_entry * 0.0135), 0.05)
-    sell_stoploss = mround(sell_entry + (sell_entry * 0.0135), 0.05)
-
-    risk_buy = buy_entry - buy_stoploss
-    risk_sell = sell_stoploss - sell_entry
-
-    shares_num = mround(risk_per_trade / risk_buy, 1) if risk_buy != 0 else 0
-
-    output = {
-    "Open": round(open_price, 2),
-    "Yesterday_High": round(yesterday_high, 2),
-    "Yesterday_Low": round(yesterday_low, 2),
-    "Buy_Entry": round(buy_entry, 2),
-    "Sell_Entry": round(sell_entry, 2),
-    "Buy_Stoploss": round(buy_stoploss, 2),
-    "Sell_Stoploss": round(sell_stoploss, 2),
-    "Shares_Buy": int(shares_num),
-    "Shares_Sell": int(shares_num),
-    "Signal": None,
-    "Current_price": None,
-    "Todays_High": None,
-    "Todays_Low": None,
-    "Signal_Flag": None
-    }
-
-
-    return output
-
-def driver_initialize():
-    options = Options()
-    options.add_argument("--headless")  # Headless mode
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    
-    # Set prefs for download behavior
-    prefs = {
-        "download.default_directory": download_dir,
-        "download.prompt_for_download": False,
-        "download.directory_upgrade": True,
-        "safebrowsing.enabled": True,
-    }
-    options.add_experimental_option("prefs", prefs)
-
-    # Options to avoid automation detection
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-plugins")
-    options.add_argument("--disable-notifications")
-    options.add_argument("start-maximized")
-    
-    # Override the navigator object to mask automation properties
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--remote-debugging-port=9222')
-
-    # Add user-agent to avoid detection
-    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    options.add_argument(f"user-agent={user_agent}")
-
-    # Additional Chrome flags to improve automation evasion
-    options.add_argument("--disable-features=IsolateOrigins,site-per-process")
-
-    service = Service(executable_path=chromedriver_path)
-    driver = webdriver.Chrome(service=service, options=options)
-    return driver
 
 def save_to_mongodb(data):
     try:
-        client = MongoClient(mongo_url)
         db = client["OT_TRADING"]
         collection = db["nine_am_data"]
 
@@ -143,75 +86,132 @@ def save_to_mongodb(data):
     except Exception as e:
         print("❌ Failed to save data to MongoDB:", e)
 
-def convert_csv_to_json(input_csv_path):
-    base_name = os.path.splitext(os.path.basename(input_csv_path))[0]
-    dir_name = os.path.dirname(input_csv_path)
-    json_file_path = os.path.join(dir_name, f"{base_name}.json")
+def mround(value, round_to):
+    return round_to * round(value / round_to)
 
-    data = []
-    with open(input_csv_path, mode='r', encoding='utf-8-sig') as csv_file:
-        csv_reader = csv.DictReader(csv_file)
-        for row in csv_reader:
-            data.append(row)
+def calculate_and_save(open_price, yesterday_high, yesterday_low):
+    open_price = float(open_price)
+    yesterday_high = float(yesterday_high)
+    yesterday_low = float(yesterday_low)
 
-    for obj in data:
-        open_val = obj['Open'] 
-        high = obj['High'] 
-        low = obj['Low']
-        result_obj = calculate_and_save(open_val, high, low)
-        obj['data'] = result_obj
+    capital = 100000  # D5
+    risk_per_trade = capital * 0.01  # 1% of capital
 
-    with open("data.json", "w", encoding='utf-8') as f:
-        json.dump(data, f, indent=4)
+    range_value = yesterday_high - yesterday_low
+    buy_entry = mround((open_price + (range_value * 0.55)), 0.05)
+    sell_entry = mround((open_price - (range_value * 0.55)), 0.05)
 
-    save_to_mongodb(data)
+    buy_stoploss = mround(buy_entry - (buy_entry * 0.0135), 0.05)
+    sell_stoploss = mround(sell_entry + (sell_entry * 0.0135), 0.05)
+
+    risk_buy = buy_entry - buy_stoploss
+    risk_sell = sell_stoploss - sell_entry
+
+    shares_num = mround(risk_per_trade / risk_buy, 1) if risk_buy != 0 else 0
+
+    output = {
+        "Buy_Entry": round(buy_entry, 2),
+        "Sell_Entry": round(sell_entry, 2),
+        "Buy_Stoploss": round(buy_stoploss, 2),
+        "Sell_Stoploss": round(sell_stoploss, 2),
+        "Shares_count": int(shares_num),
+        "Signal": None,
+        "Current_price": None,
+        "Signal_Flag": None
+    }
+
+    return output
+
+def fetch_stock_data(symbol):
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            # Get the stock quote
+            quote = nse.get_quote(symbol)
+            
+            # Structure the stock data with the 'data' key
+            stock_info = {
+                "symbol": symbol,  # Stock symbol (code)
+                "date": formatted_date,  # Current date and time in IST
+                "data": {  # Nested data object
+                    "currentPrice": quote.get("lastPrice"),
+                    "priceChange": quote.get("change"),
+                    "percentageChange": quote.get("pChange"),
+                    "previousClosePrice": quote.get("previousClose"),
+                    "openingPrice": quote.get("open"),
+                    "vwap": quote.get("vwap"),
+                    "dailyLow": quote.get("dayLow"),
+                    "dailyHigh": quote.get("dayHigh"),
+                    "yearLow": quote.get("52WeekLow"),
+                    "yearHigh": quote.get("52WeekHigh"),
+                    "lowerCircuitLimit": quote.get("lowerCircuit"),
+                    "upperCircuitLimit": quote.get("upperCircuit")
+                }
+            }
+
+            # Call the calculate_and_save function with open price, yesterday's high, and low
+            stock_data = stock_info["data"]
+            stock_info["calculated_data"] = calculate_and_save(
+                stock_data["openingPrice"],
+                stock_data["dailyHigh"],
+                stock_data["dailyLow"]
+            )
+            return stock_info
+        except Exception as e:
+            print(f"⚠️ Attempt {attempt} failed for {symbol}: {e}")
+            if attempt < MAX_RETRIES:
+                print(f"⏳ Retrying {symbol} in {RETRY_DELAY} seconds...")
+                time.sleep(RETRY_DELAY)
+            else:
+                print(f"❌ Failed to fetch data for {symbol} after {MAX_RETRIES} attempts")
     return None
 
 def main():
-    driver = driver_initialize()
+    # List to store the stock data
+    all_stock_data = []
+
     try:
-        driver.get("https://www.nseindia.com/market-data/top-gainers-losers")
-        time.sleep(2)
+        # Fetch data concurrently using ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            future_to_symbol = {executor.submit(fetch_stock_data, symbol): symbol for symbol in stock_symbols}
+            print(f"Processing started - {len(future_to_symbol)}")
+            
+            for i, future in enumerate(as_completed(future_to_symbol)):
+                symbol = future_to_symbol[future]
+                try:
+                    data = future.result()
+                    if data:
+                        all_stock_data.append(data)
 
-        # Accept cookies
-        try:
-            accept_btn = driver.find_element(By.ID, "onetrust-accept-btn-handler")
-            accept_btn.click()
-            print("Cookies accepted.")
-            time.sleep(2)
-        except:
-            print("No cookie popup found.")
-
-        # Select NIFTY 50
-        select_element = driver.find_element(By.ID, "index0")
-        select = Select(select_element)
-        select.select_by_value("NIFTY")
-        print("Selected NIFTY 50 from dropdown.")
-        time.sleep(3)
-
-        # Click the download button
-        download_button = driver.find_element(By.CLASS_NAME, "xlsdownload")
-        actions = ActionChains(driver)
-        actions.move_to_element(download_button).click().perform()
-        print("Download button clicked.")
-        time.sleep(3)
-        print("Stopping driver..")
-        driver.quit()
-        # Get the latest CSV file
-        csv_files = [f for f in os.listdir(down_folder) if f.endswith('.csv')]
-        if csv_files:
-            latest_csv = max([os.path.join(down_folder, f) for f in csv_files], key=os.path.getctime)
-            convert_csv_to_json(latest_csv)
-        else:
-            print("❌ No CSV file found in downloads folder.")
-
-    except Exception as e:
-        print("Error occurred:", e)
-        traceback.print_exc()
+                except Exception as e:
+                    print(f"❌ Unexpected error for {symbol}: {e}")
 
     finally:
-        if driver:
-            driver.quit()
+        # Save the data to a JSON file
+        if all_stock_data:
+            with open(file_name, "w", encoding='utf-8') as f:
+                json.dump(all_stock_data, f, indent=2)
+            print("✅ All stock data saved to", file_name)
+        
+        # Save to MongoDB
+        
+        # Upload to Mega
+        keys = M_TOKEN.split("_")
+        mega = Mega()
+        m = mega.login(keys[0], keys[1])
+
+        try:
+            fd_name = m.create_folder("OT_DATA")
+            f_handle = fd_name['OT_data']
+
+            uploading_file = m.upload(file_name, f_handle)
+            link = m.get_upload_link(uploading_file)
+            if link:
+                
+                save_link_to_mongodb(link,file_name)
+
+        except Exception as e:
+            print("Error failed to upload:", e)
+            save_to_mongodb(all_stock_data)
 
 if __name__ == "__main__":
     main()
