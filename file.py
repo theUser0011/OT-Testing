@@ -60,7 +60,9 @@ def calculate_and_save(open_price, yesterday_high, yesterday_low):
         "Buy_Stoploss": round(buy_stoploss, 2),
         "Sell_Stoploss": round(sell_stoploss, 2),
         "Shares_Buy": int(shares_num),
-        "Shares_Sell": int(shares_num)
+        "Shares_Sell": int(shares_num),
+        "Signal":None,
+        "Current_price":None
     }
 
     return output
