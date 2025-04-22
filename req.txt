@@ -2,3 +2,5 @@ pytz
 pymongo
 selenium
 webdriver-manager
+nseconnect
+mega.py
