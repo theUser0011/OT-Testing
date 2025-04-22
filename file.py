@@ -14,7 +14,7 @@ M_TOKEN = os.getenv("M_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
 # Fetch stock symbols
 stock_codes = nse.get_stock_codes()
-stock_codes = stock_codes[:10]
+# stock_codes = stock_codes[:10]
 client = MongoClient(MONGO_URL)
 
 stock_symbols = [symbol for symbol in stock_codes if symbol != "SYMBOL"]
@@ -22,7 +22,7 @@ stock_symbols = [symbol for symbol in stock_codes if symbol != "SYMBOL"]
 # Retry settings
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # seconds
-MAX_WORKERS = 15  # adjust based on system/network limits
+MAX_WORKERS = 10  # adjust based on system/network limits
 
 # Get current time in IST
 ist = pytz.timezone('Asia/Kolkata')
