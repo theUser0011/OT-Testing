@@ -215,17 +215,18 @@ def main():
         m = mega.login(keys[0], keys[1])
 
         try:
+            link = None
             # Attempt to create the folder
-            try:
-                fd_name = m.create_folder("OT_DATA")
-                f_handle = fd_name['OT_data']
-            except Exception as e:
-                print(f"❌ Failed to create folder: {e}")
-                raise  # Reraise the exception to stop further processing
+            # try:
+            #     fd_name = m.create_folder("OT_DATA")
+            #     f_handle = fd_name['OT_data']
+            # except Exception as e:
+            #     print(f"❌ Failed to create folder: {e}")
+            #     raise  # Reraise the exception to stop further processing
 
             # Attempt to upload the file
             try:
-                uploading_file = m.upload(file_name, f_handle)
+                uploading_file = m.upload(file_name)
                 link = m.get_upload_link(uploading_file)
             except Exception as e:
                 print(f"❌ Failed to upload file: {e}")
