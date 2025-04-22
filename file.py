@@ -14,9 +14,6 @@ M_TOKEN = os.getenv("M_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
 # Fetch stock symbols
 stock_codes = nse.get_stock_codes()
-
-stock_codes = stock_codes[:10]
-
 client = MongoClient(MONGO_URL)
 
 stock_symbols = [symbol for symbol in stock_codes if symbol != "SYMBOL"]
@@ -24,7 +21,7 @@ stock_symbols = [symbol for symbol in stock_codes if symbol != "SYMBOL"]
 # Retry settings
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # seconds
-MAX_WORKERS = 15  # adjust based on system/network limits
+MAX_WORKERS = 5  # adjust based on system/network limits
 
 # Get current time in IST
 ist = pytz.timezone('Asia/Kolkata')
@@ -130,24 +127,38 @@ def fetch_stock_data(symbol):
         try:
             # Get the stock quote
             quote = nse.get_quote(symbol)
-            
+
+            # Fetch values, and ensure they are not None by using a default value if needed
+            current_price = quote.get("lastPrice", 0.0)
+            price_change = quote.get("change", 0.0)
+            percentage_change = quote.get("pChange", 0.0)
+            previous_close_price = quote.get("previousClose", 0.0)
+            opening_price = quote.get("open", 0.0)
+            vwap = quote.get("vwap", 0.0)
+            daily_low = quote.get("dayLow", 0.0)
+            daily_high = quote.get("dayHigh", 0.0)
+            year_low = quote.get("52WeekLow", 0.0)
+            year_high = quote.get("52WeekHigh", 0.0)
+            lower_circuit_limit = quote.get("lowerCircuit", 0.0)
+            upper_circuit_limit = quote.get("upperCircuit", 0.0)
+
             # Structure the stock data with the 'data' key
             stock_info = {
                 "symbol": symbol,  # Stock symbol (code)
                 "date": formatted_date,  # Current date and time in IST
                 "data": {  # Nested data object
-                    "currentPrice": quote.get("lastPrice"),
-                    "priceChange": quote.get("change"),
-                    "percentageChange": quote.get("pChange"),
-                    "previousClosePrice": quote.get("previousClose"),
-                    "openingPrice": quote.get("open"),
-                    "vwap": quote.get("vwap"),
-                    "dailyLow": quote.get("dayLow"),
-                    "dailyHigh": quote.get("dayHigh"),
-                    "yearLow": quote.get("52WeekLow"),
-                    "yearHigh": quote.get("52WeekHigh"),
-                    "lowerCircuitLimit": quote.get("lowerCircuit"),
-                    "upperCircuitLimit": quote.get("upperCircuit")
+                    "currentPrice": current_price,
+                    "priceChange": price_change,
+                    "percentageChange": percentage_change,
+                    "previousClosePrice": previous_close_price,
+                    "openingPrice": opening_price,
+                    "vwap": vwap,
+                    "dailyLow": daily_low,
+                    "dailyHigh": daily_high,
+                    "yearLow": year_low,
+                    "yearHigh": year_high,
+                    "lowerCircuitLimit": lower_circuit_limit,
+                    "upperCircuitLimit": upper_circuit_limit
                 }
             }
 
