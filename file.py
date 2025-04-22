@@ -14,6 +14,7 @@ M_TOKEN = os.getenv("M_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
 # Fetch stock symbols
 stock_codes = nse.get_stock_codes()
+stock_codes = stock_codes[:10]
 client = MongoClient(MONGO_URL)
 
 stock_symbols = [symbol for symbol in stock_codes if symbol != "SYMBOL"]
