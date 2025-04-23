@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz, os
 from pymongo import MongoClient
 from mega import Mega
-
+ 
 # Initialize NSE instance
 nse = Nse()
 
@@ -22,7 +22,7 @@ stock_symbols = [symbol for symbol in stock_codes if symbol != "SYMBOL"]
 # Retry settings
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # seconds
-MAX_WORKERS = 15  # adjust based on system/network limits
+MAX_WORKERS = 18  # adjust based on system/network limits
 
 # Get current time in IST
 ist = pytz.timezone('Asia/Kolkata')
@@ -161,7 +161,7 @@ def fetch_stock_data(symbol):
                     "dailyHigh": daily_high,
                     "todayHigh":today_high,
                     "todayLow":today_low,
-                    "todayValue":today_value
+                    "todayEndingValue":today_value
 
                 }
             }
@@ -169,7 +169,7 @@ def fetch_stock_data(symbol):
             # Call the calculate_and_save function with open price, yesterday's high, and low
             stock_data = stock_info["data"]
             stock_info["calculated_data"] = calculate_and_save(
-                stock_data["closingPrice"],
+                stock_data["todayEndingValue"],
                 stock_data["todayHigh"],
                 stock_data["todayLow"]
             )
