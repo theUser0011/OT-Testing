@@ -169,7 +169,7 @@ def fetch_stock_data(symbol):
             # Call the calculate_and_save function with open price, yesterday's high, and low
             stock_data = stock_info["data"]
             stock_info["calculated_data"] = calculate_and_save(
-                stock_data["closing_price"],
+                stock_data["closingPrice"],
                 stock_data["todayHigh"],
                 stock_data["todayLow"]
             )
