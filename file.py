@@ -22,7 +22,7 @@ stock_symbols = [symbol for symbol in stock_codes if symbol != "SYMBOL"]
 # Retry settings
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # seconds
-MAX_WORKERS = 10  # adjust based on system/network limits
+MAX_WORKERS = 15  # adjust based on system/network limits
 
 # Get current time in IST
 ist = pytz.timezone('Asia/Kolkata')
@@ -136,12 +136,12 @@ def fetch_stock_data(symbol):
             previous_close_price = quote.get("previousClose", 0.0)
             opening_price = quote.get("open", 0.0)
             closing_price = quote.get("close",0.0)
-            vwap = quote.get("vwap", 0.0),
-            daily_low = quote.get("dayLow", 0.0),
-            daily_high = quote.get("dayHigh", 0.0),
-            intraDay = quote.get("intraDayHighLow",0.0),
-            today_low = intraDay.get("min",0.0),
-            today_high = intraDay.get("max",0.0),
+            vwap = quote.get("vwap", 0.0)
+            daily_low = quote.get("dayLow", 0.0)
+            daily_high = quote.get("dayHigh", 0.0)
+            intraDay = quote.get("intraDayHighLow", {})
+            today_low = intraDay.get("min",0.0)
+            today_high = intraDay.get("max",0.0)
             today_value = intraDay.get("value",0.0)
 
 
