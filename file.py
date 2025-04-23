@@ -135,13 +135,15 @@ def fetch_stock_data(symbol):
             percentage_change = quote.get("pChange", 0.0)
             previous_close_price = quote.get("previousClose", 0.0)
             opening_price = quote.get("open", 0.0)
-            vwap = quote.get("vwap", 0.0)
-            daily_low = quote.get("dayLow", 0.0)
-            daily_high = quote.get("dayHigh", 0.0)
-            year_low = quote.get("52WeekLow", 0.0)
-            year_high = quote.get("52WeekHigh", 0.0)
-            lower_circuit_limit = quote.get("lowerCircuit", 0.0)
-            upper_circuit_limit = quote.get("upperCircuit", 0.0)
+            closing_price = quote.get("close",0.0)
+            vwap = quote.get("vwap", 0.0),
+            daily_low = quote.get("dayLow", 0.0),
+            daily_high = quote.get("dayHigh", 0.0),
+            intraDay = quote.get("intraDayHighLow",0.0),
+            today_low = intraDay.get("min",0.0),
+            today_high = intraDay.get("max",0.0),
+            today_value = intraDay.get("value",0.0)
+
 
             # Structure the stock data with the 'data' key
             stock_info = {
@@ -153,22 +155,23 @@ def fetch_stock_data(symbol):
                     "percentageChange": percentage_change,
                     "previousClosePrice": previous_close_price,
                     "openingPrice": opening_price,
+                    "closingPrice":closing_price,
                     "vwap": vwap,
                     "dailyLow": daily_low,
                     "dailyHigh": daily_high,
-                    "yearLow": year_low,
-                    "yearHigh": year_high,
-                    "lowerCircuitLimit": lower_circuit_limit,
-                    "upperCircuitLimit": upper_circuit_limit
+                    "todayHigh":today_high,
+                    "todayLow":today_low,
+                    "todayValue":today_value
+
                 }
             }
 
             # Call the calculate_and_save function with open price, yesterday's high, and low
             stock_data = stock_info["data"]
             stock_info["calculated_data"] = calculate_and_save(
-                stock_data["openingPrice"],
-                stock_data["dailyHigh"],
-                stock_data["dailyLow"]
+                stock_data["closing_price"],
+                stock_data["todayHigh"],
+                stock_data["todayLow"]
             )
             return stock_info
         except Exception as e:
