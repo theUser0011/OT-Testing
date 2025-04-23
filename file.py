@@ -90,6 +90,9 @@ def save_to_mongodb(data):
 def mround(value, round_to):
     return round_to * round(value / round_to)
 
+def mround(value, base):
+    return round(base * round(float(value) / base), 2)
+
 def calculate_and_save(open_price, yesterday_high, yesterday_low):
     open_price = float(open_price)
     yesterday_high = float(yesterday_high)
@@ -97,6 +100,7 @@ def calculate_and_save(open_price, yesterday_high, yesterday_low):
 
     capital = 100000  # D5
     risk_per_trade = capital * 0.01  # 1% of capital
+    target_profit = capital * 0.015  # 1.5% of capital
 
     range_value = yesterday_high - yesterday_low
     buy_entry = mround((open_price + (range_value * 0.55)), 0.05)
@@ -110,11 +114,17 @@ def calculate_and_save(open_price, yesterday_high, yesterday_low):
 
     shares_num = mround(risk_per_trade / risk_buy, 1) if risk_buy != 0 else 0
 
+    # Calculate stopgain based on target profit
+    buy_stopgain = mround(buy_entry + (target_profit / shares_num), 0.05) if shares_num else 0
+    sell_stopgain = mround(sell_entry - (target_profit / shares_num), 0.05) if shares_num else 0
+
     output = {
         "Buy_Entry": round(buy_entry, 2),
         "Sell_Entry": round(sell_entry, 2),
         "Buy_Stoploss": round(buy_stoploss, 2),
         "Sell_Stoploss": round(sell_stoploss, 2),
+        "Buy_Stopgain": round(buy_stopgain, 2),
+        "Sell_Stopgain": round(sell_stopgain, 2),
         "Shares_count": int(shares_num),
         "Signal": None,
         "Current_price": None,
@@ -122,6 +132,7 @@ def calculate_and_save(open_price, yesterday_high, yesterday_low):
     }
 
     return output
+
 
 def fetch_stock_data(symbol):
     for attempt in range(1, MAX_RETRIES + 1):
