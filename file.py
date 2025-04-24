@@ -1,264 +1,88 @@
-import json
+import requests
 import time
-from nseconnect import Nse
+import json,os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
-import pytz, os
-from pymongo import MongoClient
-from mega import Mega
+import pymongo
+from pymongo.errors import PyMongoError
+
+ MONGO_URL = os.getenv("MONGO_URL")
+os.system("pip install requests)
+# MongoDB setup
+try:
+    client = pymongo.MongoClient(MONGO_URL)
+    db = client["OT_TRADING"]
+    collection = db["nine_am_data"]
  
-# Initialize NSE instance
-nse = Nse()
+except PyMongoError as e:
+    print(f"❌ Failed to connect to MongoDB: {e}")
+    exit(1)
 
-M_TOKEN = os.getenv("M_TOKEN")
-MONGO_URL = os.getenv("MONGO_URL")
-# Fetch stock symbols
-stock_codes = nse.get_stock_codes()
-# stock_codes = stock_codes[:10]
-client = MongoClient(MONGO_URL)
+TOTAL_BATCHES = 100
+WORKERS_NUM = 30
 
-stock_symbols = [symbol for symbol in stock_codes if symbol != "SYMBOL"]
+def get_base_url(batch_num):
+    if 1 <= batch_num <= 30:
+        return "https://get-stock-live-data.vercel.app/get_stocks_data?batch_num={}"
+    elif 31 <= batch_num <= 60:
+        return "https://get-stock-live-data-1.vercel.app/get_stocks_data?batch_num={}"
+    elif 61 <= batch_num <= 100:
+        return "https://get-stock-live-data-2.vercel.app/get_stocks_data?batch_num={}"
+    else:
+        raise ValueError("Batch number out of range")
 
-# Retry settings
-MAX_RETRIES = 3
-RETRY_DELAY = 5  # seconds
-MAX_WORKERS = 18  # adjust based on system/network limits
-
-# Get current time in IST
-ist = pytz.timezone('Asia/Kolkata')
-current_time_ist = datetime.now(ist)
-
-# Format date as day-month-year : hour:minute (e.g., 21-04-2025 : 23:35)
-formatted_date = current_time_ist.strftime("%d-%m-%Y : %H:%M")
-file_name = f"{formatted_date.strip()}.json"
-
-def save_link_to_mongodb(link,file_name):
-    try:
-        db = client["OT_TRADING"]
-        collection = db["file_links"]
-        
-        # Check if document with the same date already exists
-        existing_document = collection.find_one({"date": formatted_date})
-        
-        if existing_document:
-            print("❌ Data already exists for today's date. Skipping insert.")
-            return None
-        else:
-            # If no document with today's date exists, insert new data
-            document = {
-                "date": formatted_date,
-                "file_name":file_name,
-                "link": link
-            }
-            collection.insert_one(document)
-            print("✅ link Data saved to MongoDB successfully.")
-            return None
-    except Exception as e:
-        print("❌ Failed to save data to MongoDB:", e)
-
-
-def save_to_mongodb(data):
-    try:
-        db = client["OT_TRADING"]
-        collection = db["nine_am_data"]
-
-        # Get current time in IST
-        ist = pytz.timezone('Asia/Kolkata')
-        current_time_ist = datetime.now(ist)
-
-        # Format date as day-month-year : hour:minute (e.g., 21-04-2025 : 23:35)
-        formatted_date = current_time_ist.strftime("%d-%m-%Y : %H:%M")
-
-        # Check if document with the same date already exists
-        existing_document = collection.find_one({"date": formatted_date})
-        
-        if existing_document:
-            print("❌ Data already exists for today's date. Skipping insert.")
-            return None
-        else:
-            # If no document with today's date exists, insert new data
-            document = {
-                "date": formatted_date,
-                "data": data
-            }
-            collection.insert_one(document)
-            print("✅ New Data saved to MongoDB successfully.")
-            return None
-    except Exception as e:
-        print("❌ Failed to save data to MongoDB:", e)
-
-def mround(value, round_to):
-    return round_to * round(value / round_to)
-
-def mround(value, base):
-    return round(base * round(float(value) / base), 2)
-
-def calculate_and_save(open_price, yesterday_high, yesterday_low):
-    open_price = float(open_price)
-    yesterday_high = float(yesterday_high)
-    yesterday_low = float(yesterday_low)
-
-    capital = 100000  # D5
-    risk_per_trade = capital * 0.01  # 1% of capital
-    target_profit = capital * 0.015  # 1.5% of capital
-
-    range_value = yesterday_high - yesterday_low
-    buy_entry = mround((open_price + (range_value * 0.55)), 0.05)
-    sell_entry = mround((open_price - (range_value * 0.55)), 0.05)
-
-    buy_stoploss = mround(buy_entry - (buy_entry * 0.0135), 0.05)
-    sell_stoploss = mround(sell_entry + (sell_entry * 0.0135), 0.05)
-
-    risk_buy = buy_entry - buy_stoploss
-    risk_sell = sell_stoploss - sell_entry
-
-    shares_num = mround(risk_per_trade / risk_buy, 1) if risk_buy != 0 else 0
-
-    # Calculate stopgain based on target profit
-    buy_stopgain = mround(buy_entry + (target_profit / shares_num), 0.05) if shares_num else 0
-    sell_stopgain = mround(sell_entry - (target_profit / shares_num), 0.05) if shares_num else 0
-
-    output = {
-        "Buy_Entry": round(buy_entry, 2),
-        "Sell_Entry": round(sell_entry, 2),
-        "Buy_Stoploss": round(buy_stoploss, 2),
-        "Sell_Stoploss": round(sell_stoploss, 2),
-        "Buy_Stopgain": round(buy_stopgain, 2),
-        "Sell_Stopgain": round(sell_stopgain, 2),
-        "Shares_count": int(shares_num),
-        "Signal": None,
-        "Current_price": None,
-        "Signal_Flag": None
-    }
-
-    return output
-
-
-def fetch_stock_data(symbol):
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            # Get the stock quote
-            quote = nse.get_quote(symbol)
-
-            # Fetch values, and ensure they are not None by using a default value if needed
-            current_price = quote.get("lastPrice", 0.0)
-            price_change = quote.get("change", 0.0)
-            percentage_change = quote.get("pChange", 0.0)
-            previous_close_price = quote.get("previousClose", 0.0)
-            opening_price = quote.get("open", 0.0)
-            closing_price = quote.get("close",0.0)
-            vwap = quote.get("vwap", 0.0)
-            daily_low = quote.get("dayLow", 0.0)
-            daily_high = quote.get("dayHigh", 0.0)
-            intraDay = quote.get("intraDayHighLow", {})
-            today_low = intraDay.get("min",0.0)
-            today_high = intraDay.get("max",0.0)
-            today_value = intraDay.get("value",0.0)
-
-
-            # Structure the stock data with the 'data' key
-            stock_info = {
-                "symbol": symbol,  # Stock symbol (code)
-                "date": formatted_date,  # Current date and time in IST
-                "data": {  # Nested data object
-                    "currentPrice": current_price,
-                    "priceChange": price_change,
-                    "percentageChange": percentage_change,
-                    "previousClosePrice": previous_close_price,
-                    "openingPrice": opening_price,
-                    "closingPrice":closing_price,
-                    "vwap": vwap,
-                    "dailyLow": daily_low,
-                    "dailyHigh": daily_high,
-                    "todayHigh":today_high,
-                    "todayLow":today_low,
-                    "todayEndingValue":today_value
-
-                }
-            }
-
-            # Call the calculate_and_save function with open price, yesterday's high, and low
-            stock_data = stock_info["data"]
-            stock_info["calculated_data"] = calculate_and_save(
-                stock_data["todayEndingValue"],
-                stock_data["todayHigh"],
-                stock_data["todayLow"]
-            )
-            return stock_info
-        except Exception as e:
-            print(f"⚠️ Attempt {attempt} failed for {symbol}: {e}")
-            if attempt < MAX_RETRIES:
-                print(f"⏳ Retrying {symbol} in {RETRY_DELAY} seconds...")
-                time.sleep(RETRY_DELAY)
-            else:
-                print(f"❌ Failed to fetch data for {symbol} after {MAX_RETRIES} attempts")
-    return None
-
-def main():
-    # List to store the stock data
-    all_stock_data = []
+def fetch_batch_data(batch_num):
+    url = get_base_url(batch_num).format(batch_num)
+    start_time = time.perf_counter()
 
     try:
-        # Fetch data concurrently using ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            future_to_symbol = {executor.submit(fetch_stock_data, symbol): symbol for symbol in stock_symbols}
-            print(f"Processing started - {len(future_to_symbol)}")
-            
-            for i, future in enumerate(as_completed(future_to_symbol)):
-                symbol = future_to_symbol[future]
-                try:
-                    data = future.result()
-                    if data:
-                        all_stock_data.append(data)
+        response = requests.get(url, timeout=10)
+        end_time = time.perf_counter()
+        elapsed = round(end_time - start_time, 2)
 
-                except Exception as e:
-                    print(f"❌ Unexpected error for {symbol}: {e}")
-
-    finally:
-        # Save the data to a JSON file
-        if all_stock_data:
-            with open(file_name, "w", encoding='utf-8') as f:
-                json.dump(all_stock_data, f, indent=2)
-            print(f"✅ All stock data{len(all_stock_data)} saved to", file_name)
-        
-        # Save to MongoDB
-        
-        # Upload to Mega
-        keys = M_TOKEN.split("_")
-        mega = Mega()
-        m = mega.login(keys[0], keys[1])
-
-        try:
-            link = None
-            # Attempt to create the folder
-            # try:
-            #     fd_name = m.create_folder("OT_DATA")
-            #     f_handle = fd_name['OT_data']
-            # except Exception as e:
-            #     print(f"❌ Failed to create folder: {e}")
-            #     raise  # Reraise the exception to stop further processing
-
-            # Attempt to upload the file
+        if response.status_code == 200:
             try:
-                uploading_file = m.upload(file_name)
-                link = m.get_upload_link(uploading_file)
-            except Exception as e:
-                print(f"❌ Failed to upload file: {e}")
-                raise  # Reraise the exception to stop further processing
+                json_data = response.json()
+                stocks = json_data.get("stocks", [])
+                print(f"✅ Batch #{batch_num} completed in {elapsed}s with {len(stocks)} stocks.")
+                return stocks
+            except json.JSONDecodeError as je:
+                print(f"❌ JSON decode error in Batch #{batch_num}: {je}")
+                return []
+        else:
+            print(f"⚠️ Batch #{batch_num} returned status code {response.status_code} in {elapsed}s")
+            return []
 
-            # Attempt to save the link to MongoDB
-            try:
-                if link:
-                    save_link_to_mongodb(link, file_name)
-            except Exception as e:
-                print(f"❌ Failed to save link to MongoDB: {e}")
-                raise  # Reraise the exception to stop further processing
+    except requests.RequestException as e:
+        print(f"❌ Network error fetching Batch #{batch_num}: {e}")
+        return []
 
-        except Exception as e:
-            print(f"⚠️ Error occurred during upload process: {e}")
-            # Optionally, you could save the data to MongoDB here as a fallback
-            save_to_mongodb(all_stock_data)
+# Step 1: Fetch all batch data in parallel
+all_stocks = []
+try:
+    with ThreadPoolExecutor(max_workers=WORKERS_NUM) as executor:
+        futures = [executor.submit(fetch_batch_data, i) for i in range(1, TOTAL_BATCHES + 1)]
+        for future in as_completed(futures):
+            all_stocks.extend(future.result())
+except Exception as e:
+    print(f"❌ Error during batch data fetching: {e}")
+    exit(1)
 
+# Step 2: Insert new data to MongoDB
+if all_stocks:
+    try:
+        document = {"stocks": all_stocks}
+        insert_result = collection.insert_one(document)
+        new_doc_id = insert_result.inserted_id
+        print(f"✅ New stock data inserted with _id: {new_doc_id}")
 
-if __name__ == "__main__":
-    main()
+        # Step 3: Delete all other old documents except the new one
+        try:
+            delete_result = collection.delete_many({"_id": {"$ne": new_doc_id}})
+            print(f"🧹 Deleted {delete_result.deleted_count} old document(s) from MongoDB.")
+        except PyMongoError as e:
+            print(f"❌ Error deleting old documents: {e}")
+
+    except PyMongoError as e:
+        print(f"❌ Error inserting document into MongoDB: {e}")
+
+print("✅ Process completed. Data saved to MongoDB.")
