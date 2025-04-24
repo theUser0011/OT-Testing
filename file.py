@@ -35,7 +35,7 @@ def fetch_batch_data(batch_num):
     start_time = time.perf_counter()
 
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=30)
         end_time = time.perf_counter()
         elapsed = round(end_time - start_time, 2)
 
