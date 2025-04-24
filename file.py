@@ -5,8 +5,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pymongo
 from pymongo.errors import PyMongoError
 
- MONGO_URL = os.getenv("MONGO_URL")
-os.system("pip install requests)
+MONGO_URL = os.getenv("MONGO_URL")
+
 # MongoDB setup
 try:
     client = pymongo.MongoClient(MONGO_URL)
