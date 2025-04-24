@@ -3,10 +3,12 @@ name: Run OT Script
 on:
   push:
     branches:
-      - main  # Trigger on push to the main branch (you can change this if needed)
-  # workflow_dispatch:  # Allows manual triggering
+      - main
+
   schedule:
-    - cron: '30 10 * * *'  # This will run the workflow at 10:30 AM UTC, which is 4:00 PM IST
+    - cron: '50 3 * * *'  # 9:20 AM IST
+    - cron: '50 6 * * *'  # 12:20 PM IST
+    # - cron: '50 9 * * *'  # 3:20 PM IST
 
 jobs:
   run-python-script:
@@ -19,7 +21,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: '3.12'  # Specify the version of Python you want to use
+        python-version: '3.12'
 
     - name: Update apt and install system utilities
       run: |
@@ -37,7 +39,7 @@ jobs:
 
     - name: Run Python script
       env:
-        MONGO_URL: ${{ secrets.MONGO_URL }}  # Pass MongoDB URL secret
-        M_TOKEN: ${{ secrets.M_TOKEN }}  # Pass MongoDB URL secret
+        MONGO_URL: ${{ secrets.MONGO_URL }}
+        M_TOKEN: ${{ secrets.M_TOKEN }}
       run: |
         python file.py
