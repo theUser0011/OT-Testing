@@ -5,6 +5,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pymongo
 from pymongo.errors import PyMongoError
 from datetime import datetime
+import pytz
+
 
 MONGO_URL = os.getenv("MONGO_URL")
 
@@ -36,7 +38,7 @@ def fetch_batch_data(batch_num, max_retries=2):
     for attempt in range(max_retries + 1):
         start_time = time.perf_counter()
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=25)
             end_time = time.perf_counter()
             elapsed = round(end_time - start_time, 2)
 
@@ -77,10 +79,18 @@ def main():
 
     # Step 2: Insert new data to MongoDB
     if all_stocks:
+        
+        # Convert UTC time to IST
+        utc_now = datetime.utcnow().replace(tzinfo=pytz.utc)
+        ist_now = utc_now.astimezone(pytz.timezone('Asia/Kolkata'))
+        
+        # Format the timestamp in the required format (YYYY-MM-DD HH:MM:SS)
+        timestamp_str = ist_now.strftime('%Y-%m-%d %H:%M:%S')
+        
         try:
             document = {
                 "stocks": all_stocks,
-                "timestamp": datetime.utcnow()
+                "timestamp": timestamp_str
             }
             insert_result = collection.insert_one(document)
             new_doc_id = insert_result.inserted_id
