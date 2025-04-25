@@ -1,0 +1,46 @@
+name: Run OT Script
+
+on:
+  push:
+    branches:
+      - main
+
+  schedule:
+    # - cron: '50 3 * * *'  # 9:20 AM IST
+    - cron: '50 6 * * *'  # 12:20 PM IST
+    # - cron: '50 9 * * *'  # 3:20 PM IST
+
+jobs:
+  run-python-script:
+    runs-on: ubuntu-latest
+    timeout-minutes: 220  # The job will be canceled if it runs longer than 30 minutes
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.12'
+
+    - name: Update apt and install system utilities
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y apt-utils python3-pip python3-setuptools python3-dev build-essential libffi-dev
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r req.txt
+
+    - name: Install and update tenacity
+      run: |
+        pip install --upgrade tenacity
+
+    - name: Run Python script
+      env:
+        MONGO_URL: ${{ secrets.MONGO_URL }}
+        M_TOKEN: ${{ secrets.M_TOKEN }}
+      run: |
+        python file.py
