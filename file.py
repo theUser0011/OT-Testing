@@ -23,12 +23,15 @@ TOTAL_BATCHES = 100
 WORKERS_NUM = 20
 
 def get_base_url(batch_num):
-    if 1 <= batch_num <= 30:
+    if 1 <= batch_num <= 25:
         return "https://get-stock-live-data.vercel.app/get_stocks_data?batch_num={}"
-    elif 31 <= batch_num <= 60:
+    elif 26 <= batch_num <= 50:
         return "https://get-stock-live-data-1.vercel.app/get_stocks_data?batch_num={}"
-    elif 61 <= batch_num <= 100:
+    elif 51 <= batch_num <= 75:
         return "https://get-stock-live-data-2.vercel.app/get_stocks_data?batch_num={}"
+    elif 76 <= batch_num <= 100:
+        return "https://get-stock-live-data-3.vercel.app/get_stocks_data?batch_num={}"
+        
     else:
         raise ValueError("Batch number out of range")
 
@@ -58,7 +61,7 @@ def fetch_batch_data(batch_num, max_retries=2):
 
         if attempt < max_retries:
             print(f"🔁 Retrying Batch #{batch_num} (Attempt {attempt+2})...")
-            time.sleep(2)
+            time.sleep(3)
 
     print(f"❌ Failed to fetch Batch #{batch_num} after {max_retries+1} attempts.")
     return []
@@ -99,7 +102,7 @@ def main():
             # Step 3: Delete all other old documents except the new one
             try:
                 delete_result = collection.delete_many({"_id": {"$ne": new_doc_id}})
-                print(f"🧹 Deleted {delete_result.deleted_count} old document(s) from MongoDB.")
+                # print(f"🧹 Deleted {delete_result.deleted_count} old document(s) from MongoDB.")
             except PyMongoError as e:
                 print(f"❌ Error deleting old documents: {e}")
 
@@ -108,7 +111,7 @@ def main():
     else:
         print("⚠️ No stock data fetched, skipping DB update.")
 
-    print("✅ main() run completed.\n")
+    # print("✅ main() run completed.\n")
 
 # Loop to run every 30 seconds
 if __name__ == "__main__":
