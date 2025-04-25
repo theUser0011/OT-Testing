@@ -46,7 +46,7 @@ def fetch_batch_data(batch_num, max_retries=2):
                 try:
                     json_data = response.json()
                     stocks = json_data.get("stocks", [])
-                    print(f"✅ Batch #{batch_num} completed in {elapsed}s with {len(stocks)} stocks.")
+                    # print(f"✅ Batch #{batch_num} completed in {elapsed}s with {len(stocks)} stocks.")
                     return stocks
                 except json.JSONDecodeError as je:
                     print(f"❌ JSON decode error in Batch #{batch_num}: {je}")
@@ -64,7 +64,7 @@ def fetch_batch_data(batch_num, max_retries=2):
     return []
 
 def main():
-    print(f"\n⏱️ Running main() at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    # print(f"\n⏱️ Running main() at {datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
     # Step 1: Fetch all batch data in parallel
     all_stocks = []
@@ -94,7 +94,7 @@ def main():
             }
             insert_result = collection.insert_one(document)
             new_doc_id = insert_result.inserted_id
-            print(f"✅ New stock data inserted with _id: {new_doc_id}")
+            # print(f"✅ New stock data inserted with _id: {new_doc_id}")
 
             # Step 3: Delete all other old documents except the new one
             try:
@@ -114,5 +114,5 @@ def main():
 if __name__ == "__main__":
     while True:
         main()
-        print("⏳ Sleeping for 30 seconds...\n")
+        # print("⏳ Sleeping for 30 seconds...\n")
         time.sleep(30)
