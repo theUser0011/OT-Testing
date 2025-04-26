@@ -6,10 +6,11 @@ import pymongo
 from pymongo.errors import PyMongoError
 from datetime import datetime
 import pytz
-
+from mega import Mega
 
 MONGO_URL = os.getenv("MONGO_URL")
-
+M_TOKEN = os.getenv("M_TOKEN")
+EXECUTION_FLAG = os.getenv("EXECUTION_FLAG")
 # MongoDB setup
 try:
     client = pymongo.MongoClient(MONGO_URL)
@@ -105,17 +106,63 @@ def main():
                 # print(f"🧹 Deleted {delete_result.deleted_count} old document(s) from MongoDB.")
             except PyMongoError as e:
                 print(f"❌ Error deleting old documents: {e}")
-
+            if document:
+                return document
         except PyMongoError as e:
             print(f"❌ Error inserting document into MongoDB: {e}")
+
     else:
         print("⚠️ No stock data fetched, skipping DB update.")
 
     # print("✅ main() run completed.\n")
 
-# Loop to run every 30 seconds
+
 if __name__ == "__main__":
-    while True:
-        main()
-        # print("⏳ Sleeping for 30 seconds...\n")
-        time.sleep(30)
+    india_timezone = pytz.timezone('Asia/Kolkata')  # IST timezone
+    try:
+        final_data = []
+        infinite_loop_flag = True
+        while infinite_loop_flag:
+            now = datetime.now(india_timezone)  # get current IST time
+            weekday = now.weekday()  # Monday = 0, Sunday = 6
+            current_hour = now.hour
+            
+            # Check if today is Monday to Friday and time is between 9:00 and 15:59
+            if 0 <= weekday <= 4 and (9 <= current_hour < 16):
+                can_run = True
+                
+            elif int(EXECUTION_FLAG) >0:
+                 
+                can_run = True
+                
+                # If Execution flag is true then its for testing purpose of one time only
+                infinite_loop_flag = False
+                
+            else:
+                can_run = False
+            
+            if can_run:
+                result = main()
+                if result: 
+                    final_data.append(result)
+            else:
+                print("⏳ Not (Outside allowed days/hours) Stopping Execution")
+                break
+            
+            time.sleep(30)
+
+    finally:
+        # Save final_data to a JSON file with today's date (dd-mm-yy.json)
+        now = datetime.now(india_timezone)
+        file_name = now.strftime("%d-%m-%y") + ".json"
+        with open(file_name, "w", encoding="utf-8") as f:
+            json.dump(final_data, f, ensure_ascii=False, indent=4)
+        print(f"✅ Saved collected data to {file_name}")
+
+        mega = Mega()
+        keys = M_TOKEN.split("_")
+        m = mega.login(keys[0],keys[1])
+        try:
+            m.upload(file_name)
+        except Exception as e:
+            print("Error failed to upload file : ",e)
