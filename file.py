@@ -4,7 +4,7 @@ import json, os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pymongo
 from pymongo.errors import PyMongoError
-from datetime import datetime
+from datetime import datetime, timezone
 import pytz
 from mega import Mega
 
