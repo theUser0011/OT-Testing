@@ -85,7 +85,7 @@ def main():
     if all_stocks:
         
         # Convert UTC time to IST
-        utc_now = datetime.utcnow().replace(tzinfo=pytz.utc)
+        utc_now = datetime.now(timezone.utc)
         ist_now = utc_now.astimezone(pytz.timezone('Asia/Kolkata'))
         
         # Format the timestamp in the required format (YYYY-MM-DD HH:MM:SS)
@@ -107,6 +107,7 @@ def main():
             except PyMongoError as e:
                 print(f"❌ Error deleting old documents: {e}")
             if document:
+                document["_id"] = str(new_doc_id)  # convert ObjectId to string
                 return document
         except PyMongoError as e:
             print(f"❌ Error inserting document into MongoDB: {e}")
