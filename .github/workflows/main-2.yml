@@ -42,5 +42,7 @@ jobs:
       env:
         MONGO_URL: ${{ secrets.MONGO_URL }}
         M_TOKEN: ${{ secrets.M_TOKEN }}
+        EXECUTION_FLAG: 0
+        
       run: |
         python file.py
