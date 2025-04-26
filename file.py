@@ -152,17 +152,19 @@ if __name__ == "__main__":
             time.sleep(30)
 
     finally:
-        # Save final_data to a JSON file with today's date (dd-mm-yy.json)
-        now = datetime.now(india_timezone)
-        file_name = now.strftime("%d-%m-%y") + ".json"
-        with open(file_name, "w", encoding="utf-8") as f:
-            json.dump(final_data, f, ensure_ascii=False, indent=4)
-        print(f"✅ Saved collected data to {file_name}")
+        if len(final_data)>0:
+                
+            # Save final_data to a JSON file with today's date (dd-mm-yy.json)
+            now = datetime.now(india_timezone)
+            file_name = now.strftime("%d-%m-%y") + ".json"
+            with open(file_name, "w", encoding="utf-8") as f:
+                json.dump(final_data, f, ensure_ascii=False, indent=4)
+            print(f"✅ Saved collected data to {file_name}")
 
-        mega = Mega()
-        keys = M_TOKEN.split("_")
-        m = mega.login(keys[0],keys[1])
-        try:
-            m.upload(file_name)
-        except Exception as e:
-            print("Error failed to upload file : ",e)
+            mega = Mega()
+            keys = M_TOKEN.split("_")
+            m = mega.login(keys[0],keys[1])
+            try:
+                m.upload(file_name)
+            except Exception as e:
+                print("Error failed to upload file : ",e)
