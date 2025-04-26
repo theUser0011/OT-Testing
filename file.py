@@ -122,6 +122,7 @@ if __name__ == "__main__":
     india_timezone = pytz.timezone('Asia/Kolkata')  # IST timezone
     try:
         final_data = []
+        lst = []
         infinite_loop_flag = True
         while infinite_loop_flag:
             now = datetime.now(india_timezone)  # get current IST time
@@ -154,12 +155,16 @@ if __name__ == "__main__":
 
     finally:
         if len(final_data)>0:
-                
+            meta_data = final_data[-1]
+            lst.append({
+                "Data":final_data,
+                "MetaData":meta_data
+            })
             # Save final_data to a JSON file with today's date (dd-mm-yy.json)
             now = datetime.now(india_timezone)
             file_name = now.strftime("%d-%m-%y") + ".json"
             with open(file_name, "w", encoding="utf-8") as f:
-                json.dump(final_data, f, ensure_ascii=False, indent=4)
+                json.dump(lst, f, ensure_ascii=False, indent=4)
             print(f"✅ Saved collected data to {file_name}")
 
             mega = Mega()
