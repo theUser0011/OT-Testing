@@ -14,6 +14,10 @@ MONGO_URL = os.getenv("MONGO_URL")
 M_TOKEN = os.getenv("M_TOKEN")
 EXECUTION_FLAG = os.getenv("EXECUTION_FLAG")
 
+total_count = 0
+fetched_count = 0
+
+
 # MongoDB Setup
 try:
     client = pymongo.MongoClient(MONGO_URL)
@@ -42,10 +46,27 @@ def get_base_url(batch_num):
     else:
         raise ValueError("Batch number out of range")
 
-
+def fetch_total_stock_codes():
+    global total_count
+    
+    url = get_base_url(0)  # batch_num < 1
+    try:
+        response = requests.get(url, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            total_stock_codes = data.get('total_stock_codes')
+            if total_stock_codes is not None:
+                total_count = total_stock_codes
+            else:
+                print("⚠️ 'total_stock_codes' not found in response")
+        else:
+            print(f"❌ Failed to fetch data, status code: {response.status_code}")
+    except Exception as e:
+        print(f"❌ Error fetching total stock codes: {e}")
+        
 def fetch_batch_data(batch_num, max_retries=2):
     url = get_base_url(batch_num).format(batch_num)
-    
+    global fetched_count
     for attempt in range(max_retries + 1):
         try:
             start_time = time.perf_counter()
@@ -55,6 +76,7 @@ def fetch_batch_data(batch_num, max_retries=2):
             if response.status_code == 200:
                 try:
                     data = response.json()
+                    fetched_count += 1
                     return data.get("stocks", [])
                 except json.JSONDecodeError as je:
                     print(f"❌ JSON decode error in Batch #{batch_num}: {je}")
@@ -85,14 +107,16 @@ def insert_new_stock_data(stocks):
     if not stocks:
         print("⚠️ No stock data fetched, skipping DB update.")
         return None
-
+    global fetched_count,total_count
     utc_now = datetime.now(timezone.utc)
     ist_now = utc_now.astimezone(INDIA_TIMEZONE)
     timestamp_str = ist_now.strftime('%Y-%m-%d %H:%M:%S')
 
     document = {
         "stocks": stocks,
-        "timestamp": timestamp_str
+        "timestamp": timestamp_str,
+        "fetched_count":fetched_count,
+        "total_count":total_count
     }
 
     try:
@@ -170,6 +194,7 @@ def main():
     collected_data = []
     try:
         infinite_loop_flag = True
+        fetch_total_stock_codes()
 
         while infinite_loop_flag:
             if should_run():
