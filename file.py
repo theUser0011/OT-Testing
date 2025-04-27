@@ -1,5 +1,5 @@
 import requests
-import time
+import time, gzip
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -114,17 +114,23 @@ def insert_new_stock_data(stocks):
 
 def save_data_to_json_file(data_list):
     now = datetime.now(INDIA_TIMEZONE)
-    file_name = now.strftime("%d-%m-%y_%H") + ".json"
+    file_name = now.strftime("%d-%m-%y_%H") + ".json.gz"  # .gz extension
+
     structured_data = [{
         "Data": data_list,
         "MetaData": data_list[-1]  # last element is latest
     }]
 
-    with open(file_name, "w", encoding="utf-8") as f:
-        json.dump(structured_data, f, ensure_ascii=False, indent=4)
-    print(f"✅ Saved collected data to {file_name}")
+    json_data = json.dumps(structured_data, ensure_ascii=False, indent=4)
+    json_bytes = json_data.encode('utf-8')  # encode to bytes
+
+    with gzip.open(file_name, "wb") as f:
+        f.write(json_bytes)
+
+    print(f"✅ Saved and compressed data to {file_name}")
 
     return file_name
+
 
 
 def upload_to_mega(file_path):
