@@ -15,7 +15,8 @@ EXECUTION_FLAG = os.getenv("EXECUTION_FLAG")
 try:
     client = pymongo.MongoClient(MONGO_URL)
     db = client["OT_TRADING"]
-    collection = db["nine_am_data"]
+    collection_two = db["nine_am_data"]    
+    collection = db["live_data"]
 except PyMongoError as e:
     print(f"❌ Failed to connect to MongoDB: {e}")
     exit(1)
@@ -120,6 +121,7 @@ def main():
 
 if __name__ == "__main__":
     india_timezone = pytz.timezone('Asia/Kolkata')  # IST timezone
+
     try:
         final_data = []
         lst = []
@@ -155,14 +157,16 @@ if __name__ == "__main__":
 
     finally:
         if len(final_data)>0:
+            
             meta_data = final_data[-1]
+            
             lst.append({
                 "Data":final_data,
                 "MetaData":meta_data
             })
             # Save final_data to a JSON file with today's date (dd-mm-yy.json)
             now = datetime.now(india_timezone)
-            file_name = now.strftime("%d-%m-%y") + ".json"
+            file_name = now.strftime("%d-%m-%y_%H") + ".json"
             with open(file_name, "w", encoding="utf-8") as f:
                 json.dump(lst, f, ensure_ascii=False, indent=4)
             print(f"✅ Saved collected data to {file_name}")
@@ -174,3 +178,8 @@ if __name__ == "__main__":
                 m.upload(file_name)
             except Exception as e:
                 print("Error failed to upload file : ",e)
+                
+             # Check if hour is greater than 15, and insert meta_data into collection_two if so
+            if now.hour > 15:
+                collection_two.insert_one(meta_data)
+                print(f"✅ Inserted meta_data into 'nine_am_data' collection at hour {now.hour}")                
