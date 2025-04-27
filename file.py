@@ -14,10 +14,6 @@ MONGO_URL = os.getenv("MONGO_URL")
 M_TOKEN = os.getenv("M_TOKEN")
 EXECUTION_FLAG = os.getenv("EXECUTION_FLAG")
 
-total_count = 0
-fetched_count = []
-
-
 # MongoDB Setup
 try:
     client = pymongo.MongoClient(MONGO_URL)
@@ -35,9 +31,7 @@ INDIA_TIMEZONE = pytz.timezone('Asia/Kolkata')
 
 
 def get_base_url(batch_num):
-    if batch_num <1 :
-        return "https://get-stock-live-data.vercel.app/get_all_stock_codes"     
-    elif 1 <= batch_num <= 25:
+    if 1 <= batch_num <= 25:
         return "https://get-stock-live-data.vercel.app/get_stocks_data?batch_num={}"
     elif 26 <= batch_num <= 50:
         return "https://get-stock-live-data-1.vercel.app/get_stocks_data?batch_num={}"
@@ -48,26 +42,10 @@ def get_base_url(batch_num):
     else:
         raise ValueError("Batch number out of range")
 
-def fetch_total_stock_codes():
-    global total_count
-    
-    url = get_base_url(0)  # batch_num < 1
-    try:
-        response = requests.get(url, timeout=15)
-        if response.status_code == 200:
-            data = response.json()
-            total_stock_codes = data.get('total_stock_codes')
-            if total_stock_codes is not None:
-                total_count = total_stock_codes
-            else:
-                print("⚠️ 'total_stock_codes' not found in response")
-        else:
-            print(f"❌ Failed to fetch data, status code: {response.status_code}")
-    except Exception as e:
-        print(f"❌ Error fetching total stock codes: {e}")
-        
-def fetch_batch_data(batch_num,fetched_count, max_retries=2):
+
+def fetch_batch_data(batch_num, max_retries=2):
     url = get_base_url(batch_num).format(batch_num)
+    
     for attempt in range(max_retries + 1):
         try:
             start_time = time.perf_counter()
@@ -77,7 +55,6 @@ def fetch_batch_data(batch_num,fetched_count, max_retries=2):
             if response.status_code == 200:
                 try:
                     data = response.json()
-                    fetched_count.append(batch_num)
                     return data.get("stocks", [])
                 except json.JSONDecodeError as je:
                     print(f"❌ JSON decode error in Batch #{batch_num}: {je}")
@@ -94,15 +71,13 @@ def fetch_batch_data(batch_num,fetched_count, max_retries=2):
     print(f"❌ Failed to fetch Batch #{batch_num} after {max_retries+1} attempts.")
     return []
 
+
 def fetch_all_batches():
     all_stocks = []
-    global fetched_count
-
     with ThreadPoolExecutor(max_workers=WORKERS_NUM) as executor:
-        futures = [executor.submit(fetch_batch_data, i, fetched_count) for i in range(1, TOTAL_BATCHES + 1)]
+        futures = [executor.submit(fetch_batch_data, i) for i in range(1, TOTAL_BATCHES + 1)]
         for future in as_completed(futures):
             all_stocks.extend(future.result())
-
     return all_stocks
 
 
@@ -110,16 +85,14 @@ def insert_new_stock_data(stocks):
     if not stocks:
         print("⚠️ No stock data fetched, skipping DB update.")
         return None
-    global fetched_count,total_count
+
     utc_now = datetime.now(timezone.utc)
     ist_now = utc_now.astimezone(INDIA_TIMEZONE)
     timestamp_str = ist_now.strftime('%Y-%m-%d %H:%M:%S')
 
     document = {
         "stocks": stocks,
-        "timestamp": timestamp_str,
-        "fetched_count":sorted(fetched_count),
-        "total_count":total_count
+        "timestamp": timestamp_str
     }
 
     try:
@@ -197,7 +170,6 @@ def main():
     collected_data = []
     try:
         infinite_loop_flag = True
-        fetch_total_stock_codes()
 
         while infinite_loop_flag:
             if should_run():
