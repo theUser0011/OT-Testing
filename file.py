@@ -66,9 +66,8 @@ def fetch_total_stock_codes():
     except Exception as e:
         print(f"❌ Error fetching total stock codes: {e}")
         
-def fetch_batch_data(batch_num, max_retries=2):
+def fetch_batch_data(batch_num,fetched_count, max_retries=2):
     url = get_base_url(batch_num).format(batch_num)
-    global fetched_count
     for attempt in range(max_retries + 1):
         try:
             start_time = time.perf_counter()
@@ -95,13 +94,15 @@ def fetch_batch_data(batch_num, max_retries=2):
     print(f"❌ Failed to fetch Batch #{batch_num} after {max_retries+1} attempts.")
     return []
 
-
 def fetch_all_batches():
     all_stocks = []
+    global fetched_count
+
     with ThreadPoolExecutor(max_workers=WORKERS_NUM) as executor:
-        futures = [executor.submit(fetch_batch_data, i) for i in range(1, TOTAL_BATCHES + 1)]
+        futures = [executor.submit(fetch_batch_data, i, fetched_count) for i in range(1, TOTAL_BATCHES + 1)]
         for future in as_completed(futures):
             all_stocks.extend(future.result())
+
     return all_stocks
 
 
