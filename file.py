@@ -118,7 +118,7 @@ def insert_new_stock_data(stocks):
     document = {
         "stocks": stocks,
         "timestamp": timestamp_str,
-        "fetched_count":fetched_count,
+        "fetched_count":sorted(fetched_count),
         "total_count":total_count
     }
 
