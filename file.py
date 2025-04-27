@@ -35,7 +35,9 @@ INDIA_TIMEZONE = pytz.timezone('Asia/Kolkata')
 
 
 def get_base_url(batch_num):
-    if 1 <= batch_num <= 25:
+    if batch_num <1 :
+        return "https://get-stock-live-data.vercel.app/get_all_stock_codes"     
+    elif 1 <= batch_num <= 25:
         return "https://get-stock-live-data.vercel.app/get_stocks_data?batch_num={}"
     elif 26 <= batch_num <= 50:
         return "https://get-stock-live-data-1.vercel.app/get_stocks_data?batch_num={}"
