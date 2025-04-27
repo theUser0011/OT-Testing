@@ -15,7 +15,7 @@ M_TOKEN = os.getenv("M_TOKEN")
 EXECUTION_FLAG = os.getenv("EXECUTION_FLAG")
 
 total_count = 0
-fetched_count = 0
+fetched_count = []
 
 
 # MongoDB Setup
@@ -35,9 +35,7 @@ INDIA_TIMEZONE = pytz.timezone('Asia/Kolkata')
 
 
 def get_base_url(batch_num):
-    if batch_num <1 :
-        return "https://get-stock-live-data.vercel.app/get_all_stock_codes"     
-    elif 1 <= batch_num <= 25:
+    if 1 <= batch_num <= 25:
         return "https://get-stock-live-data.vercel.app/get_stocks_data?batch_num={}"
     elif 26 <= batch_num <= 50:
         return "https://get-stock-live-data-1.vercel.app/get_stocks_data?batch_num={}"
@@ -78,7 +76,7 @@ def fetch_batch_data(batch_num, max_retries=2):
             if response.status_code == 200:
                 try:
                     data = response.json()
-                    fetched_count += 1
+                    fetched_count.append(batch_num)
                     return data.get("stocks", [])
                 except json.JSONDecodeError as je:
                     print(f"❌ JSON decode error in Batch #{batch_num}: {je}")
