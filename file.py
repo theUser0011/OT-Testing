@@ -180,7 +180,9 @@ def main():
                     collected_data.append(inserted_doc)
 
             elif int(EXECUTION_FLAG) > 0:
+                print("Setting infinite loop to false")
                 infinite_loop_flag = False
+                
             else:
                 print("⏳ Outside allowed days/hours. Stopping Execution.")
                 break
