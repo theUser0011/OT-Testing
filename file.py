@@ -1,200 +1,200 @@
-import requests
-import time, gzip
-import json
-import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import pymongo 
-from pymongo.errors import PyMongoError
-from datetime import datetime, timezone
-import pytz
-from mega import Mega
+# import requests
+# import time, gzip
+# import json
+# import os
+# from concurrent.futures import ThreadPoolExecutor, as_completed
+# import pymongo 
+# from pymongo.errors import PyMongoError
+# from datetime import datetime, timezone
+# import pytz
+# from mega import Mega
 
-# Environment Variables
-MONGO_URL = os.getenv("MONGO_URL")
-M_TOKEN = os.getenv("M_TOKEN")
-EXECUTION_FLAG = os.getenv("EXECUTION_FLAG")
+# # Environment Variables
+# MONGO_URL = os.getenv("MONGO_URL")
+# M_TOKEN = os.getenv("M_TOKEN")
+# EXECUTION_FLAG = os.getenv("EXECUTION_FLAG")
 
-# MongoDB Setup
-try:
-    client = pymongo.MongoClient(MONGO_URL)
-    db = client["OT_TRADING"]
-    collection = db["live_data"]
-    collection_two = db["nine_am_data"]
-except PyMongoError as e:
-    print(f"❌ Failed to connect to MongoDB: {e}")
-    exit(1)
+# # MongoDB Setup
+# try:
+#     client = pymongo.MongoClient(MONGO_URL)
+#     db = client["OT_TRADING"]
+#     collection = db["live_data"]
+#     collection_two = db["nine_am_data"]
+# except PyMongoError as e:
+#     print(f"❌ Failed to connect to MongoDB: {e}")
+#     exit(1)
 
-# Constants
-TOTAL_BATCHES = 100
-WORKERS_NUM = 10
-INDIA_TIMEZONE = pytz.timezone('Asia/Kolkata')
-
-
-def get_base_url(batch_num):
-    if 1 <= batch_num <= 25:
-        return "https://get-stock-live-data.vercel.app/get_stocks_data?batch_num={}"
-    elif 26 <= batch_num <= 50:
-        return "https://get-stock-live-data-1.vercel.app/get_stocks_data?batch_num={}"
-    elif 51 <= batch_num <= 75:
-        return "https://get-stock-live-data-2.vercel.app/get_stocks_data?batch_num={}"
-    elif 76 <= batch_num <= 100:
-        return "https://get-stock-live-data-3.vercel.app/get_stocks_data?batch_num={}"
-    else:
-        raise ValueError("Batch number out of range")
+# # Constants
+# TOTAL_BATCHES = 100
+# WORKERS_NUM = 10
+# INDIA_TIMEZONE = pytz.timezone('Asia/Kolkata')
 
 
-def fetch_batch_data(batch_num, max_retries=2):
-    url = get_base_url(batch_num).format(batch_num)
+# def get_base_url(batch_num):
+#     if 1 <= batch_num <= 25:
+#         return "https://get-stock-live-data.vercel.app/get_stocks_data?batch_num={}"
+#     elif 26 <= batch_num <= 50:
+#         return "https://get-stock-live-data-1.vercel.app/get_stocks_data?batch_num={}"
+#     elif 51 <= batch_num <= 75:
+#         return "https://get-stock-live-data-2.vercel.app/get_stocks_data?batch_num={}"
+#     elif 76 <= batch_num <= 100:
+#         return "https://get-stock-live-data-3.vercel.app/get_stocks_data?batch_num={}"
+#     else:
+#         raise ValueError("Batch number out of range")
+
+
+# def fetch_batch_data(batch_num, max_retries=2):
+#     url = get_base_url(batch_num).format(batch_num)
     
-    for attempt in range(max_retries + 1):
-        try:
-            start_time = time.perf_counter()
-            response = requests.get(url, timeout=25)
-            elapsed_time = round(time.perf_counter() - start_time, 2)
+#     for attempt in range(max_retries + 1):
+#         try:
+#             start_time = time.perf_counter()
+#             response = requests.get(url, timeout=25)
+#             elapsed_time = round(time.perf_counter() - start_time, 2)
 
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    return data.get("stocks", [])
-                except json.JSONDecodeError as je:
-                    print(f"❌ JSON decode error in Batch #{batch_num}: {je}")
-            else:
-                print(f"⚠️ Batch #{batch_num} returned status {response.status_code} in {elapsed_time}s")
+#             if response.status_code == 200:
+#                 try:
+#                     data = response.json()
+#                     return data.get("stocks", [])
+#                 except json.JSONDecodeError as je:
+#                     print(f"❌ JSON decode error in Batch #{batch_num}: {je}")
+#             else:
+#                 print(f"⚠️ Batch #{batch_num} returned status {response.status_code} in {elapsed_time}s")
 
-        except Exception as e:
-            print(f"❌ Error fetching Batch #{batch_num} (Attempt {attempt+1}/{max_retries}): {e}")
+#         except Exception as e:
+#             print(f"❌ Error fetching Batch #{batch_num} (Attempt {attempt+1}/{max_retries}): {e}")
 
-        if attempt < max_retries:
-            print(f"🔁 Retrying Batch #{batch_num} (Attempt {attempt+2})...")
-            time.sleep(3)
+#         if attempt < max_retries:
+#             print(f"🔁 Retrying Batch #{batch_num} (Attempt {attempt+2})...")
+#             time.sleep(3)
 
-    print(f"❌ Failed to fetch Batch #{batch_num} after {max_retries+1} attempts.")
-    return []
-
-
-def fetch_all_batches():
-    all_stocks = []
-    with ThreadPoolExecutor(max_workers=WORKERS_NUM) as executor:
-        futures = [executor.submit(fetch_batch_data, i) for i in range(1, TOTAL_BATCHES + 1)]
-        for future in as_completed(futures):
-            all_stocks.extend(future.result())
-    return all_stocks
+#     print(f"❌ Failed to fetch Batch #{batch_num} after {max_retries+1} attempts.")
+#     return []
 
 
-def insert_new_stock_data(stocks):
-    if not stocks:
-        print("⚠️ No stock data fetched, skipping DB update.")
-        return None
-
-    utc_now = datetime.now(timezone.utc)
-    ist_now = utc_now.astimezone(INDIA_TIMEZONE)
-    timestamp_str = ist_now.strftime('%Y-%m-%d %H:%M:%S')
-
-    document = {
-        "stocks": stocks,
-        "timestamp": timestamp_str
-    }
-
-    try:
-        insert_result = collection.insert_one(document)
-        document["_id"] = str(insert_result.inserted_id)
-
-        # Clean old documents
-        try:
-            delete_result = collection.delete_many({"_id": {"$ne": insert_result.inserted_id}})
-        except PyMongoError as e:
-            print(f"❌ Error deleting old documents: {e}")
-
-        return document
-
-    except PyMongoError as e:
-        print(f"❌ Error inserting document into MongoDB: {e}")
-        return None
+# def fetch_all_batches():
+#     all_stocks = []
+#     with ThreadPoolExecutor(max_workers=WORKERS_NUM) as executor:
+#         futures = [executor.submit(fetch_batch_data, i) for i in range(1, TOTAL_BATCHES + 1)]
+#         for future in as_completed(futures):
+#             all_stocks.extend(future.result())
+#     return all_stocks
 
 
-def save_data_to_json_file(data_list):
-    now = datetime.now(INDIA_TIMEZONE)
-    file_name = now.strftime("%d-%m-%y_%H") + ".json.gz"  # .gz extension
+# def insert_new_stock_data(stocks):
+#     if not stocks:
+#         print("⚠️ No stock data fetched, skipping DB update.")
+#         return None
 
-    structured_data = [{
-        "Data": data_list,
-        "MetaData": data_list[-1]  # last element is latest
-    }]
+#     utc_now = datetime.now(timezone.utc)
+#     ist_now = utc_now.astimezone(INDIA_TIMEZONE)
+#     timestamp_str = ist_now.strftime('%Y-%m-%d %H:%M:%S')
 
-    json_data = json.dumps(structured_data, ensure_ascii=False, indent=4)
-    json_bytes = json_data.encode('utf-8')  # encode to bytes
+#     document = {
+#         "stocks": stocks,
+#         "timestamp": timestamp_str
+#     }
 
-    with gzip.open(file_name, "wb") as f:
-        f.write(json_bytes)
+#     try:
+#         insert_result = collection.insert_one(document)
+#         document["_id"] = str(insert_result.inserted_id)
 
-    print(f"✅ Saved and compressed data to {file_name}")
+#         # Clean old documents
+#         try:
+#             delete_result = collection.delete_many({"_id": {"$ne": insert_result.inserted_id}})
+#         except PyMongoError as e:
+#             print(f"❌ Error deleting old documents: {e}")
 
-    return file_name
+#         return document
 
-
-
-def upload_to_mega(file_path):
-    try:
-        mega = Mega()
-        keys = M_TOKEN.split("_")
-        m = mega.login(keys[0], keys[1])
-        m.upload(file_path)
-        print(f"✅ Uploaded {file_path} to Mega")
-    except Exception as e:
-        print(f"❌ Error uploading file to Mega: {e}")
-
-
-def insert_into_nine_am_data(meta_data):
-    now = datetime.now(INDIA_TIMEZONE)
-    if now.hour > 15:
-        try:
-            collection_two.insert_one(meta_data)
-            print(f"✅ Inserted meta_data into 'nine_am_data' collection at hour {now.hour}")
-        except PyMongoError as e:
-            print(f"❌ Error inserting into nine_am_data collection: {e}")
+#     except PyMongoError as e:
+#         print(f"❌ Error inserting document into MongoDB: {e}")
+#         return None
 
 
-def should_run():
-    now = datetime.now(INDIA_TIMEZONE)
-    weekday = now.weekday()
-    current_hour = now.hour
+# def save_data_to_json_file(data_list):
+#     now = datetime.now(INDIA_TIMEZONE)
+#     file_name = now.strftime("%d-%m-%y_%H") + ".json.gz"  # .gz extension
 
-    if 0 <= weekday <= 4 and (9 <= current_hour < 16):
-        return True
-    if int(EXECUTION_FLAG) > 0:
-        return True
-    return False
+#     structured_data = [{
+#         "Data": data_list,
+#         "MetaData": data_list[-1]  # last element is latest
+#     }]
+
+#     json_data = json.dumps(structured_data, ensure_ascii=False, indent=4)
+#     json_bytes = json_data.encode('utf-8')  # encode to bytes
+
+#     with gzip.open(file_name, "wb") as f:
+#         f.write(json_bytes)
+
+#     print(f"✅ Saved and compressed data to {file_name}")
+
+#     return file_name
 
 
-def main():
-    collected_data = []
-    try:
-        infinite_loop_flag = True
 
-        while infinite_loop_flag:
-            if should_run():
-                stocks = fetch_all_batches()
-                inserted_doc = insert_new_stock_data(stocks)
+# def upload_to_mega(file_path):
+#     try:
+#         mega = Mega()
+#         keys = M_TOKEN.split("_")
+#         m = mega.login(keys[0], keys[1])
+#         m.upload(file_path)
+#         print(f"✅ Uploaded {file_path} to Mega")
+#     except Exception as e:
+#         print(f"❌ Error uploading file to Mega: {e}")
 
-                if inserted_doc:
-                    collected_data.append(inserted_doc)
 
-            elif int(EXECUTION_FLAG) > 0:
-                print("Setting infinite loop to false")
-                infinite_loop_flag = False
+# def insert_into_nine_am_data(meta_data):
+#     now = datetime.now(INDIA_TIMEZONE)
+#     if now.hour > 15:
+#         try:
+#             collection_two.insert_one(meta_data)
+#             print(f"✅ Inserted meta_data into 'nine_am_data' collection at hour {now.hour}")
+#         except PyMongoError as e:
+#             print(f"❌ Error inserting into nine_am_data collection: {e}")
+
+
+# def should_run():
+#     now = datetime.now(INDIA_TIMEZONE)
+#     weekday = now.weekday()
+#     current_hour = now.hour
+
+#     if 0 <= weekday <= 4 and (9 <= current_hour < 16):
+#         return True
+#     if int(EXECUTION_FLAG) > 0:
+#         return True
+#     return False
+
+
+# def main():
+#     collected_data = []
+#     try:
+#         infinite_loop_flag = True
+
+#         while infinite_loop_flag:
+#             if should_run():
+#                 stocks = fetch_all_batches()
+#                 inserted_doc = insert_new_stock_data(stocks)
+
+#                 if inserted_doc:
+#                     collected_data.append(inserted_doc)
+
+#             elif int(EXECUTION_FLAG) > 0:
+#                 print("Setting infinite loop to false")
+#                 infinite_loop_flag = False
                 
-            else:
-                print("⏳ Outside allowed days/hours. Stopping Execution.")
-                break
+#             else:
+#                 print("⏳ Outside allowed days/hours. Stopping Execution.")
+#                 break
 
-            time.sleep(30)
+#             time.sleep(30)
 
-    finally:
-        if collected_data:
-            file_name = save_data_to_json_file(collected_data)
-            upload_to_mega(file_name)
-            insert_into_nine_am_data(collected_data[-1])
+#     finally:
+#         if collected_data:
+#             file_name = save_data_to_json_file(collected_data)
+#             upload_to_mega(file_name)
+#             insert_into_nine_am_data(collected_data[-1])
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
